@@ -71,7 +71,7 @@ pub fn struct_(tokens: TokenList) -> ParseResult<StructType> {
 }
 
 struct TypeRef<'a, 's>(&'a mut Option<Type<'s>>);
-impl<'a, 's> TypeRef<'a, 's> {
+impl<'s> TypeRef<'_, 's> {
     fn take(self) -> Type<'s> {
         self.0.take().unwrap()
     }

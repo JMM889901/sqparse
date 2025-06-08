@@ -21,7 +21,7 @@ pub fn preprocessed_if_contents_terminal(tokens: TokenList) -> bool {
 pub fn preprocessed_if<'s, T, FnParser: Fn(TokenList<'s>) -> ParseResult<'s, T>>(
     tokens: TokenList<'s>,
     parser: FnParser,
-) -> ParseResult<Box<PreprocessorIfExpression<T>>> {
+) -> ParseResult<'s, Box<PreprocessorIfExpression<'s, T>>> {
     tokens
         .terminal(TerminalToken::PreprocessorIf)
         .determines_and_opens(
@@ -51,7 +51,7 @@ pub fn preprocessed_if<'s, T, FnParser: Fn(TokenList<'s>) -> ParseResult<'s, T>>
 pub fn preprocessed_elseif<'s, T, FnParser: Fn(TokenList<'s>) -> ParseResult<'s, T>>(
     tokens: TokenList<'s>,
     parser: FnParser,
-) -> ParseResult<Box<PreprocessorElseIfExpression<T>>> {
+) -> ParseResult<'s, Box<PreprocessorElseIfExpression<'s, T>>> {
     tokens
         .terminal(TerminalToken::PreprocessorElseIf)
         .determines(|tokens, elseif_| {
@@ -73,7 +73,7 @@ pub fn preprocessed_elseif<'s, T, FnParser: Fn(TokenList<'s>) -> ParseResult<'s,
 pub fn preprocessed_else<'s, T, FnParser: Fn(TokenList<'s>) -> ParseResult<'s, T>>(
     tokens: TokenList<'s>,
     parser: FnParser,
-) -> ParseResult<PreprocessorElseExpression<T>> {
+) -> ParseResult<'s, PreprocessorElseExpression<'s, T>> {
     tokens
         .terminal(TerminalToken::PreprocessorElse)
         .determines(|tokens, else_| {

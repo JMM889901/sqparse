@@ -299,7 +299,7 @@ pub fn lambda(tokens: TokenList) -> ParseResult<LambdaExpression> {
 }
 
 struct ExpressionRef<'a, 's>(&'a mut Option<Box<Expression<'s>>>);
-impl<'a, 's> ExpressionRef<'a, 's> {
+impl<'s> ExpressionRef<'_, 's> {
     fn take(self) -> Box<Expression<'s>> {
         self.0.take().unwrap()
     }

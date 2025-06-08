@@ -1,5 +1,6 @@
 use crate::annotation::{display_annotations, Annotation, Mode};
 use crate::token::TokenType;
+use crate::TokenItem;
 use std::ops::Range;
 use yansi::Paint;
 
