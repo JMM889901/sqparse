@@ -95,6 +95,7 @@ impl<'s> Iterator for TokenIter<'s> {
                     return Some(Ok(token));
                 }
             } else {
+                self.val = self.val.from(1);
                 // Not a newline, not a comment, not a token.
                 return Some(Err(LexerError::new(
                     LexerErrorType::InvalidInput,

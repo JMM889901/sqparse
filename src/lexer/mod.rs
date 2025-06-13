@@ -119,7 +119,7 @@ impl <'s> TokenizeResult<'s> {
     pub fn unwrap(self) -> Vec<TokenItem<'s>> {//Why would you want to do this?
         match self {
             TokenizeResult::Ok(tokens) => tokens,
-            TokenizeResult::Err(failure) => panic!("Tokenization failed: {}", failure.display("", None)),
+            TokenizeResult::Err(failure) => panic!("Tokenization failed: {:?}", failure),
         }
     }
     pub fn unwrap_err(self) -> TokenizeFailure<'s> {
