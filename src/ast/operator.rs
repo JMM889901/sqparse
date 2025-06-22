@@ -122,7 +122,7 @@ pub enum PostfixOperator<'s> {
     Decrement(&'s Token<'s>),
 }
 
-impl<'s> BinaryOperator<'s> {
+impl BinaryOperator<'_> {
     /// Returns the [`Precedence`] of the operator.
     pub fn precedence(self) -> Precedence {
         match self {

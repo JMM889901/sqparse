@@ -6,7 +6,7 @@ use crate::parser::expression::expression;
 use crate::parser::identifier::identifier;
 use crate::parser::parse_result_ext::ParseResultExt;
 use crate::parser::statement::statement_type;
-use crate::parser::token_list::TokenList;
+use crate::parser::token_list::TokenIter;
 use crate::parser::token_list_ext::TokenListExt;
 use crate::parser::type_::type_;
 use crate::parser::variable::var_initializer;
@@ -14,7 +14,7 @@ use crate::parser::ParseResult;
 use crate::token::TerminalToken;
 use crate::ContextType;
 
-pub fn function_definition(tokens: TokenList) -> ParseResult<FunctionDefinition> {
+pub fn function_definition<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, FunctionDefinition<'a>, Tokens> {
     let (tokens, environment) = function_environment(tokens).maybe(tokens)?;
     let (tokens, (open, params, close)) = tokens.terminal(TerminalToken::OpenBracket).opens(
         ContextType::FunctionParamList,
@@ -44,7 +44,7 @@ pub fn function_definition(tokens: TokenList) -> ParseResult<FunctionDefinition>
     ))
 }
 
-pub fn function_environment(tokens: TokenList) -> ParseResult<FunctionEnvironment> {
+pub fn function_environment<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, FunctionEnvironment<'a>, Tokens> {
     tokens.terminal(TerminalToken::OpenSquare).opens(
         ContextType::FunctionEnvironment,
         |tokens| tokens.terminal(TerminalToken::CloseSquare),
@@ -55,7 +55,7 @@ pub fn function_environment(tokens: TokenList) -> ParseResult<FunctionEnvironmen
     )
 }
 
-pub fn function_params(tokens: TokenList) -> ParseResult<FunctionParams> {
+pub fn function_params<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, FunctionParams<'a>, Tokens> {
     let (tokens, maybe_list) = tokens.separated_list_trailing0(
         |tokens| {
             let res = function_param(tokens);
@@ -96,11 +96,11 @@ pub fn function_params(tokens: TokenList) -> ParseResult<FunctionParams> {
     Ok((tokens, FunctionParams::NonVariable { params: Some(list) }))
 }
 
-pub fn function_param(tokens: TokenList) -> ParseResult<FunctionParam> {
+pub fn function_param<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, FunctionParam<'a>, Tokens> {
     typed_function_param(tokens).or_try(|| untyped_function_param(tokens))
 }
 
-fn typed_function_param(tokens: TokenList) -> ParseResult<FunctionParam> {
+fn typed_function_param<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, FunctionParam<'a>, Tokens> {
     type_(tokens)
         .and_then(|(tokens, type_)| identifier(tokens).map_val(|name| (type_, name)))
         .determines(|tokens, (type_, name)| {
@@ -116,7 +116,7 @@ fn typed_function_param(tokens: TokenList) -> ParseResult<FunctionParam> {
         })
 }
 
-fn untyped_function_param(tokens: TokenList) -> ParseResult<FunctionParam> {
+fn untyped_function_param<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, FunctionParam<'a>, Tokens> {
     identifier(tokens).determines(|tokens, name| {
         let (tokens, initializer) = var_initializer(tokens).maybe(tokens)?;
         Ok((
@@ -130,7 +130,7 @@ fn untyped_function_param(tokens: TokenList) -> ParseResult<FunctionParam> {
     })
 }
 
-pub fn function_captures(tokens: TokenList) -> ParseResult<FunctionCaptures> {
+pub fn function_captures<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, FunctionCaptures<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::Colon)
         .determines(|tokens, colon| {
@@ -159,7 +159,7 @@ pub fn function_captures(tokens: TokenList) -> ParseResult<FunctionCaptures> {
         })
 }
 
-pub fn function_ref_param(tokens: TokenList) -> ParseResult<FunctionRefParam> {
+pub fn function_ref_param<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, FunctionRefParam<'a>, Tokens> {
     let (tokens, type_) = type_(tokens)?;
     let (tokens, name) = identifier(tokens).maybe(tokens)?;
     let (tokens, initializer) = var_initializer(tokens).maybe(tokens)?;
@@ -173,7 +173,7 @@ pub fn function_ref_param(tokens: TokenList) -> ParseResult<FunctionRefParam> {
     ))
 }
 
-pub fn call_argument(tokens: TokenList) -> ParseResult<CallArgument> {
+pub fn call_argument<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, CallArgument<'a>, Tokens> {
     let (tokens, value) = expression(tokens, Precedence::Comma)?;
     let (tokens, comma) = tokens.terminal(TerminalToken::Comma).maybe(tokens)?;
     Ok((tokens, CallArgument { value, comma }))

@@ -6,17 +6,17 @@ use crate::parser::expression::expression;
 use crate::parser::identifier::identifier;
 use crate::parser::parse_result_ext::ParseResultExt;
 use crate::parser::statement::{statement, statement_type, typed_var_definition_statement};
-use crate::parser::token_list::TokenList;
+use crate::parser::token_list::{TokenIter};
 use crate::parser::token_list_ext::TokenListExt;
 use crate::parser::type_::type_;
 use crate::parser::ParseResult;
 use crate::token::{TerminalToken, Token};
 use crate::ContextType;
 
-pub fn if_statement_type(tokens: TokenList) -> ParseResult<IfStatementType> {
+pub fn if_statement_type<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, IfStatementType<'a>, Tokens> {
     let (tokens, body) = statement_type(tokens).maybe(tokens)?;
 
-    if let None = body {
+    if body.is_none() {
         return Ok((tokens, IfStatementType::NoElseTailless));
     }
 
@@ -48,7 +48,7 @@ pub fn if_statement_type(tokens: TokenList) -> ParseResult<IfStatementType> {
     Ok((tokens, IfStatementType::ElseTailless { body, else_ }))
 }
 
-pub fn switch_case(tokens: TokenList) -> ParseResult<SwitchCase> {
+pub fn switch_case<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, SwitchCase<'a>, Tokens> {
     switch_case_condition(tokens).determines(|tokens, condition| {
         let (tokens, colon) = tokens.terminal(TerminalToken::Colon)?;
         let (tokens, body) = tokens.many(statement)?;
@@ -63,17 +63,17 @@ pub fn switch_case(tokens: TokenList) -> ParseResult<SwitchCase> {
     })
 }
 
-pub fn switch_case_condition(tokens: TokenList) -> ParseResult<SwitchCaseCondition> {
+pub fn switch_case_condition<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, SwitchCaseCondition<'a>, Tokens> {
     default_switch_case_condition(tokens).or_try(|| case_switch_case_condition(tokens))
 }
 
-fn default_switch_case_condition(tokens: TokenList) -> ParseResult<SwitchCaseCondition> {
+fn default_switch_case_condition<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, SwitchCaseCondition<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::Default)
         .map_val(|default| SwitchCaseCondition::Default { default })
 }
 
-fn case_switch_case_condition(tokens: TokenList) -> ParseResult<SwitchCaseCondition> {
+fn case_switch_case_condition<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, SwitchCaseCondition<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::Case)
         .determines(|tokens, case| {
@@ -82,11 +82,11 @@ fn case_switch_case_condition(tokens: TokenList) -> ParseResult<SwitchCaseCondit
         })
 }
 
-pub fn for_definition(tokens: TokenList) -> ParseResult<ForDefinition> {
+pub fn for_definition<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, ForDefinition<'a>, Tokens> {
     var_for_definition(tokens).or_try(|| expression_for_definition(tokens))
 }
 
-fn var_for_definition(tokens: TokenList) -> ParseResult<ForDefinition> {
+fn var_for_definition<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, ForDefinition<'a>, Tokens> {
     type_(tokens)
         .not_definite()
         .and_then(|(tokens, type_)| typed_var_definition_statement(tokens, type_))
@@ -94,17 +94,17 @@ fn var_for_definition(tokens: TokenList) -> ParseResult<ForDefinition> {
         .map_val(ForDefinition::Definition)
 }
 
-fn expression_for_definition(tokens: TokenList) -> ParseResult<ForDefinition> {
+fn expression_for_definition<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, ForDefinition<'a>, Tokens> {
     expression(tokens, Precedence::None)
         .with_context_from(ContextType::Expression, tokens)
         .map_val(ForDefinition::Expression)
 }
 
-pub fn foreach_index(tokens: TokenList) -> ParseResult<ForeachIndex> {
+pub fn foreach_index<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, ForeachIndex<'a>, Tokens> {
     untyped_foreach_index(tokens).or_try(|| typed_foreach_index(tokens))
 }
 
-fn untyped_foreach_index(tokens: TokenList) -> ParseResult<ForeachIndex> {
+fn untyped_foreach_index<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, ForeachIndex<'a>, Tokens> {
     let (tokens, name) = identifier(tokens)?;
     let (tokens, comma) = tokens.terminal(TerminalToken::Comma)?;
     Ok((
@@ -117,7 +117,7 @@ fn untyped_foreach_index(tokens: TokenList) -> ParseResult<ForeachIndex> {
     ))
 }
 
-fn typed_foreach_index(tokens: TokenList) -> ParseResult<ForeachIndex> {
+fn typed_foreach_index<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, ForeachIndex<'a>, Tokens> {
     let (tokens, type_) = type_(tokens)?;
     let (tokens, name) = identifier(tokens)?;
     let (tokens, comma) = tokens.terminal(TerminalToken::Comma)?;
@@ -131,11 +131,11 @@ fn typed_foreach_index(tokens: TokenList) -> ParseResult<ForeachIndex> {
     ))
 }
 
-pub fn foreach_value(tokens: TokenList) -> ParseResult<(Option<Type>, Identifier, &Token)> {
+pub fn foreach_value<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, (Option<Type<'a>>, Identifier<'a>, &'a Token<'a>), Tokens> {
     untyped_foreach_value(tokens).or_try(|| typed_foreach_value(tokens))
 }
 
-fn typed_foreach_value(tokens: TokenList) -> ParseResult<(Option<Type>, Identifier, &Token)> {
+fn typed_foreach_value<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, (Option<Type<'a>>, Identifier<'a>, &'a Token<'a>), Tokens> {
     type_(tokens)
         .and_then(|(tokens, type_)| identifier(tokens).map_val(|name| (type_, name)))
         .determines(|tokens, (type_, name)| {
@@ -144,7 +144,7 @@ fn typed_foreach_value(tokens: TokenList) -> ParseResult<(Option<Type>, Identifi
         })
 }
 
-fn untyped_foreach_value(tokens: TokenList) -> ParseResult<(Option<Type>, Identifier, &Token)> {
+fn untyped_foreach_value<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, (Option<Type<'a>>, Identifier<'a>, &'a Token<'a>), Tokens> {
     let (tokens, name) = identifier(tokens)?;
     let (tokens, in_) = tokens.terminal(TerminalToken::In)?;
     Ok((tokens, (None, name, in_)))

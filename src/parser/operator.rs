@@ -1,11 +1,11 @@
 use crate::ast::{BinaryOperator, PostfixOperator, PrefixOperator};
 use crate::parser::parse_result_ext::ParseResultExt;
-use crate::parser::token_list::TokenList;
+use crate::parser::token_list::TokenIter;
 use crate::parser::token_list_ext::TokenListExt;
 use crate::parser::{ParseErrorType, ParseResult};
 use crate::token::TerminalToken;
 
-pub fn prefix_operator(tokens: TokenList) -> ParseResult<PrefixOperator> {
+pub fn prefix_operator<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, PrefixOperator<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::Subtract)
         .map_val(PrefixOperator::Negate)
@@ -47,7 +47,7 @@ pub fn prefix_operator(tokens: TokenList) -> ParseResult<PrefixOperator> {
         .or_error(|| tokens.error(ParseErrorType::ExpectedPrefixOperator))
 }
 
-pub fn postfix_operator(tokens: TokenList) -> ParseResult<PostfixOperator> {
+pub fn postfix_operator<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, PostfixOperator<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::Increment)
         .map_val(PostfixOperator::Increment)
@@ -59,7 +59,7 @@ pub fn postfix_operator(tokens: TokenList) -> ParseResult<PostfixOperator> {
         .or_error(|| tokens.error(ParseErrorType::ExpectedPostfixOperator))
 }
 
-pub fn binary_operator(tokens: TokenList) -> ParseResult<BinaryOperator> {
+pub fn binary_operator<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, BinaryOperator<'a>, Tokens> {
     tokens
         .terminal2(TerminalToken::Less, TerminalToken::Subtract)
         .map_val(|(a, b)| BinaryOperator::AssignNewSlot(a, b))

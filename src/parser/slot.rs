@@ -3,7 +3,7 @@ use crate::parser::expression::expression;
 use crate::parser::function::function_definition;
 use crate::parser::identifier::identifier;
 use crate::parser::parse_result_ext::ParseResultExt;
-use crate::parser::token_list::TokenList;
+use crate::parser::token_list::TokenIter;
 use crate::parser::token_list_ext::TokenListExt;
 use crate::parser::type_::type_;
 use crate::parser::variable::var_initializer;
@@ -11,7 +11,7 @@ use crate::parser::ParseResult;
 use crate::token::TerminalToken;
 use crate::{ContextType, ParseErrorType};
 
-pub fn slot(tokens: TokenList) -> ParseResult<Slot> {
+pub fn slot<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, Slot<'a>, Tokens> {
     // `constructor_slot` must go before `function_slot` to ensure "function constructor(..)" is
     // parsed correctly.
     // `function_slot` must go before anything that can look like a type, to ensure the return type
@@ -23,7 +23,7 @@ pub fn slot(tokens: TokenList) -> ParseResult<Slot> {
         .or_error(|| tokens.error(ParseErrorType::ExpectedSlot))
 }
 
-fn property_slot(tokens: TokenList) -> ParseResult<Slot> {
+fn property_slot<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, Slot<'a>, Tokens> {
     identifier(tokens)
         .determines(|tokens, name| {
             var_initializer(tokens).map_val(|initializer| Slot::Property { name, initializer })
@@ -31,7 +31,7 @@ fn property_slot(tokens: TokenList) -> ParseResult<Slot> {
         .with_context_from(ContextType::Property, tokens)
 }
 
-fn computed_property_slot(tokens: TokenList) -> ParseResult<Slot> {
+fn computed_property_slot<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, Slot<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::OpenSquare)
         .opens(
@@ -52,7 +52,7 @@ fn computed_property_slot(tokens: TokenList) -> ParseResult<Slot> {
         .with_context_from(ContextType::Property, tokens)
 }
 
-fn constructor_slot(tokens: TokenList) -> ParseResult<Slot> {
+fn constructor_slot<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, Slot<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::Function)
         .maybe(tokens)
@@ -71,7 +71,7 @@ fn constructor_slot(tokens: TokenList) -> ParseResult<Slot> {
         .with_context_from(ContextType::Constructor, tokens)
 }
 
-fn function_slot(tokens: TokenList) -> ParseResult<Slot> {
+fn function_slot<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, Slot<'a>, Tokens> {
     type_(tokens)
         .not_line_ending()
         .not_definite()

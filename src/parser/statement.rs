@@ -20,7 +20,7 @@ use crate::parser::global::global_definition;
 use crate::parser::identifier::identifier;
 use crate::parser::parse_result_ext::ParseResultExt;
 use crate::parser::struct_::struct_definition;
-use crate::parser::token_list::TokenList;
+use crate::parser::token_list::TokenIter;
 use crate::parser::token_list_ext::TokenListExt;
 use crate::parser::type_::type_;
 use crate::parser::variable::{var_definition, var_initializer};
@@ -31,7 +31,7 @@ use crate::{ContextType, ParseErrorType};
 use super::preprocessed::{preprocessed_if, preprocessed_if_contents_terminal};
 use super::table::string_literal;
 
-pub fn statement(tokens: TokenList) -> ParseResult<Statement> {
+pub fn statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, Statement<'a>, Tokens> {
     let (next_tokens, statement) = inner_statement(tokens)?;
 
     // Statement must end with a semicolon, newline, or end of input.
@@ -57,7 +57,7 @@ pub fn statement(tokens: TokenList) -> ParseResult<Statement> {
         .with_context_from(ContextType::Statement, tokens)
 }
 
-fn inner_statement(tokens: TokenList) -> ParseResult<Statement> {
+fn inner_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, Statement<'a>, Tokens> {
     // Handle a completely empty statement that just has a semicolon
     if let Ok((tokens, semicolon)) = tokens.terminal(TerminalToken::Semicolon) {
         return Ok((
@@ -75,7 +75,7 @@ fn inner_statement(tokens: TokenList) -> ParseResult<Statement> {
     Ok((tokens, Statement { ty, semicolon }))
 }
 
-pub fn statement_type(tokens: TokenList) -> ParseResult<StatementType> {
+pub fn statement_type<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, StatementType<'a>, Tokens> {
     // Look ahead to allow empty statements.
     if tokens.terminal(TerminalToken::Semicolon).is_ok() {
         return Ok((tokens, StatementType::Empty(EmptyStatement { empty: None })));
@@ -131,13 +131,13 @@ pub fn statement_type(tokens: TokenList) -> ParseResult<StatementType> {
         .or_error(|| tokens.error(ParseErrorType::ExpectedStatement))
 }
 
-pub fn expression_statement(tokens: TokenList) -> ParseResult<ExpressionStatement> {
+pub fn expression_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, ExpressionStatement<'a>, Tokens> {
     expression(tokens, Precedence::None)
         .map_val(|value| ExpressionStatement { value })
         .with_context_from(ContextType::Expression, tokens)
 }
 
-pub fn block_statement(tokens: TokenList) -> ParseResult<BlockStatement> {
+pub fn block_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, BlockStatement<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::OpenBrace)
         .determines_and_opens(
@@ -157,17 +157,17 @@ pub fn block_statement(tokens: TokenList) -> ParseResult<BlockStatement> {
         )
 }
 
-pub fn preprocessed_if_statement(
-    tokens: TokenList,
-) -> ParseResult<Box<PreprocessorIfExpression<Vec<Statement>>>> {
+pub fn preprocessed_if_statement<'a, Tokens: TokenIter<'a>>(
+    tokens: Tokens,
+) -> ParseResult<'a, Box<PreprocessorIfExpression<'a, Vec<Statement<'a>>>>, Tokens> {
     preprocessed_if(tokens, |tokens| {
         tokens.many_until(preprocessed_if_contents_terminal, statement)
     })
 }
 
-pub fn preprocessed_documentation_statement(
-    tokens: TokenList,
-) -> ParseResult<PreprocessedDocumentation> {
+pub fn preprocessed_documentation_statement<'a, Tokens: TokenIter<'a>>(
+    tokens: Tokens,
+) -> ParseResult<'a, PreprocessedDocumentation<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::PreprocessorDocument)
         .determines(|tokens, document| {
@@ -214,7 +214,7 @@ pub fn preprocessed_documentation_statement(
         })
 }
 
-pub fn if_statement(tokens: TokenList) -> ParseResult<IfStatement> {
+pub fn if_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, IfStatement<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::If)
         .determines(|tokens, if_| {
@@ -243,7 +243,7 @@ pub fn if_statement(tokens: TokenList) -> ParseResult<IfStatement> {
         .with_context_from(ContextType::IfStatement, tokens)
 }
 
-pub fn while_statement(tokens: TokenList) -> ParseResult<WhileStatement> {
+pub fn while_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, WhileStatement<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::While)
         .determines(|tokens, while_| {
@@ -276,7 +276,7 @@ pub fn while_statement(tokens: TokenList) -> ParseResult<WhileStatement> {
         .with_context_from(ContextType::WhileStatement, tokens)
 }
 
-pub fn do_while_statement(tokens: TokenList) -> ParseResult<DoWhileStatement> {
+pub fn do_while_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, DoWhileStatement<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::Do)
         .determines(|tokens, do_| {
@@ -312,7 +312,7 @@ pub fn do_while_statement(tokens: TokenList) -> ParseResult<DoWhileStatement> {
         .with_context_from(ContextType::DoWhileStatement, tokens)
 }
 
-pub fn switch_statement(tokens: TokenList) -> ParseResult<SwitchStatement> {
+pub fn switch_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, SwitchStatement<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::Switch)
         .determines(|tokens, switch| {
@@ -353,7 +353,7 @@ pub fn switch_statement(tokens: TokenList) -> ParseResult<SwitchStatement> {
         .with_context_from(ContextType::SwitchStatement, tokens)
 }
 
-pub fn for_statement(tokens: TokenList) -> ParseResult<ForStatement> {
+pub fn for_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, ForStatement<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::For)
         .determines(|tokens, for_| {
@@ -409,7 +409,7 @@ pub fn for_statement(tokens: TokenList) -> ParseResult<ForStatement> {
         .with_context_from(ContextType::ForStatement, tokens)
 }
 
-pub fn foreach_statement(tokens: TokenList) -> ParseResult<ForeachStatement> {
+pub fn foreach_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, ForeachStatement<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::Foreach)
         .determines(|tokens, foreach| {
@@ -453,7 +453,7 @@ pub fn foreach_statement(tokens: TokenList) -> ParseResult<ForeachStatement> {
         .with_context_from(ContextType::ForeachStatement, tokens)
 }
 
-pub fn try_catch_statement(tokens: TokenList) -> ParseResult<TryCatchStatement> {
+pub fn try_catch_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, TryCatchStatement<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::Try)
         .determines(|tokens, try_| {
@@ -492,19 +492,19 @@ pub fn try_catch_statement(tokens: TokenList) -> ParseResult<TryCatchStatement> 
         })
 }
 
-pub fn break_statement(tokens: TokenList) -> ParseResult<BreakStatement> {
+pub fn break_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, BreakStatement<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::Break)
         .map_val(|break_| BreakStatement { break_ })
 }
 
-pub fn continue_statement(tokens: TokenList) -> ParseResult<ContinueStatement> {
+pub fn continue_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, ContinueStatement<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::Continue)
         .map_val(|continue_| ContinueStatement { continue_ })
 }
 
-pub fn return_statement(tokens: TokenList) -> ParseResult<ReturnStatement> {
+pub fn return_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, ReturnStatement<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::Return)
         .determines(|tokens, return_| {
@@ -520,7 +520,7 @@ pub fn return_statement(tokens: TokenList) -> ParseResult<ReturnStatement> {
         .with_context_from(ContextType::ReturnStatement, tokens)
 }
 
-pub fn yield_statement(tokens: TokenList) -> ParseResult<YieldStatement> {
+pub fn yield_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, YieldStatement<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::Yield)
         .determines(|tokens, yield_| {
@@ -536,7 +536,7 @@ pub fn yield_statement(tokens: TokenList) -> ParseResult<YieldStatement> {
         .with_context_from(ContextType::YieldStatement, tokens)
 }
 
-pub fn throw_statement(tokens: TokenList) -> ParseResult<ThrowStatement> {
+pub fn throw_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, ThrowStatement<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::Throw)
         .determines(|tokens, throw| {
@@ -545,7 +545,7 @@ pub fn throw_statement(tokens: TokenList) -> ParseResult<ThrowStatement> {
         .with_context_from(ContextType::ThrowStatement, tokens)
 }
 
-pub fn const_definition_statement(tokens: TokenList) -> ParseResult<ConstDefinitionStatement> {
+pub fn const_definition_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, ConstDefinitionStatement<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::Const)
         .determines(|tokens, const_| {
@@ -555,10 +555,10 @@ pub fn const_definition_statement(tokens: TokenList) -> ParseResult<ConstDefinit
         .with_context_from(ContextType::ConstDefinition, tokens)
 }
 
-fn untyped_const_definition_statement<'s>(
-    tokens: TokenList<'s>,
+fn untyped_const_definition_statement<'s, Tokens: TokenIter<'s>>(
+    tokens: Tokens,
     const_: &'s Token<'s>,
-) -> ParseResult<'s, ConstDefinitionStatement<'s>> {
+) -> ParseResult<'s, ConstDefinitionStatement<'s>, Tokens> {
     let (tokens, name) = identifier(tokens)?;
     let (tokens, initializer) = var_initializer(tokens)?;
     Ok((
@@ -572,10 +572,10 @@ fn untyped_const_definition_statement<'s>(
     ))
 }
 
-fn typed_const_definition_statement<'s>(
-    tokens: TokenList<'s>,
+fn typed_const_definition_statement<'s, Tokens: TokenIter<'s>>(
+    tokens: Tokens,
     const_: &'s Token<'s>,
-) -> ParseResult<'s, ConstDefinitionStatement<'s>> {
+) -> ParseResult<'s, ConstDefinitionStatement<'s>, Tokens> {
     let (tokens, const_type) = type_(tokens)?;
     let (tokens, name) = identifier(tokens)?;
     let (tokens, initializer) = var_initializer(tokens)?;
@@ -590,7 +590,7 @@ fn typed_const_definition_statement<'s>(
     ))
 }
 
-pub fn class_definition_statement(tokens: TokenList) -> ParseResult<ClassDefinitionStatement> {
+pub fn class_definition_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, ClassDefinitionStatement<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::Class)
         .determines(|tokens, class| {
@@ -609,7 +609,7 @@ pub fn class_definition_statement(tokens: TokenList) -> ParseResult<ClassDefinit
         .with_context_from(ContextType::ClassDefinition, tokens)
 }
 
-pub fn enum_definition_statement(tokens: TokenList) -> ParseResult<EnumDefinitionStatement> {
+pub fn enum_definition_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, EnumDefinitionStatement<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::Enum)
         .determines(|tokens, enum_| {
@@ -639,7 +639,7 @@ pub fn enum_definition_statement(tokens: TokenList) -> ParseResult<EnumDefinitio
         .with_context_from(ContextType::EnumDefinition, tokens)
 }
 
-pub fn typed_function_or_var_definition_statement(tokens: TokenList) -> ParseResult<StatementType> {
+pub fn typed_function_or_var_definition_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, StatementType<'a>, Tokens> {
     let (next_tokens, type_) = type_(tokens).not_definite()?;
 
     match (
@@ -661,11 +661,11 @@ pub fn typed_function_or_var_definition_statement(tokens: TokenList) -> ParseRes
     }
 }
 
-pub fn typed_function_definition_statement<'s>(
-    tokens: TokenList<'s>,
+pub fn typed_function_definition_statement<'s, Tokens: TokenIter<'s>>(
+    tokens: Tokens,
     return_type: Type<'s>,
     function: &'s Token<'s>,
-) -> ParseResult<'s, FunctionDefinitionStatement<'s>> {
+) -> ParseResult<'s, FunctionDefinitionStatement<'s>, Tokens> {
     tokens
         .separated_list1(identifier, |tokens| {
             tokens.terminal(TerminalToken::Namespace)
@@ -685,10 +685,10 @@ pub fn typed_function_definition_statement<'s>(
         })
 }
 
-pub fn typed_var_definition_statement<'s>(
-    tokens: TokenList<'s>,
+pub fn typed_var_definition_statement<'s, Tokens: TokenIter<'s>>(
+    tokens: Tokens,
     type_: Type<'s>,
-) -> ParseResult<'s, VarDefinitionStatement<'s>> {
+) -> ParseResult<'s, VarDefinitionStatement<'s>, Tokens> {
     identifier(tokens).determines(|tokens, name| {
         let (tokens, initializer) = var_initializer(tokens).maybe(tokens)?;
         let first_definition = VarDefinition { name, initializer };
@@ -701,7 +701,7 @@ pub fn typed_var_definition_statement<'s>(
     })
 }
 
-pub fn void_function_definition_statement(tokens: TokenList) -> ParseResult<StatementType> {
+pub fn void_function_definition_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, StatementType<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::Function)
         .and_then(|(tokens, function)| {
@@ -749,7 +749,7 @@ pub fn void_function_definition_statement(tokens: TokenList) -> ParseResult<Stat
         .with_context_from(ContextType::FunctionDefinition, tokens)
 }
 
-pub fn struct_definition_statement(tokens: TokenList) -> ParseResult<StructDefinitionStatement> {
+pub fn struct_definition_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, StructDefinitionStatement<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::Struct)
         .determines(|tokens, struct_| {
@@ -767,7 +767,7 @@ pub fn struct_definition_statement(tokens: TokenList) -> ParseResult<StructDefin
         .with_context_from(ContextType::StructDefinition, tokens)
 }
 
-pub fn type_definition_statement(tokens: TokenList) -> ParseResult<TypeDefinitionStatement> {
+pub fn type_definition_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, TypeDefinitionStatement<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::Typedef)
         .determines(|tokens, typedef| {
@@ -785,7 +785,7 @@ pub fn type_definition_statement(tokens: TokenList) -> ParseResult<TypeDefinitio
         .with_context_from(ContextType::TypeDefinition, tokens)
 }
 
-pub fn thread_statement(tokens: TokenList) -> ParseResult<ThreadStatement> {
+pub fn thread_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, ThreadStatement<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::Thread)
         .determines(|tokens, thread| {
@@ -794,7 +794,7 @@ pub fn thread_statement(tokens: TokenList) -> ParseResult<ThreadStatement> {
         .with_context_from(ContextType::ThreadStatement, tokens)
 }
 
-pub fn delay_thread_statement(tokens: TokenList) -> ParseResult<DelayThreadStatement> {
+pub fn delay_thread_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, DelayThreadStatement<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::DelayThread)
         .determines(|tokens, delay_thread| {
@@ -821,7 +821,7 @@ pub fn delay_thread_statement(tokens: TokenList) -> ParseResult<DelayThreadState
         .with_context_from(ContextType::DelayThreadStatement, tokens)
 }
 
-pub fn wait_thread_statement(tokens: TokenList) -> ParseResult<WaitThreadStatement> {
+pub fn wait_thread_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, WaitThreadStatement<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::WaitThread)
         .determines(|tokens, wait_thread| {
@@ -831,7 +831,7 @@ pub fn wait_thread_statement(tokens: TokenList) -> ParseResult<WaitThreadStateme
         .with_context_from(ContextType::WaitThreadStatement, tokens)
 }
 
-pub fn wait_thread_solo_statement(tokens: TokenList) -> ParseResult<WaitThreadSoloStatement> {
+pub fn wait_thread_solo_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, WaitThreadSoloStatement<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::WaitThreadSolo)
         .determines(|tokens, wait_thread_solo| {
@@ -843,7 +843,7 @@ pub fn wait_thread_solo_statement(tokens: TokenList) -> ParseResult<WaitThreadSo
         .with_context_from(ContextType::WaitThreadSoloStatement, tokens)
 }
 
-pub fn wait_statement(tokens: TokenList) -> ParseResult<WaitStatement> {
+pub fn wait_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, WaitStatement<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::Wait)
         .determines(|tokens, wait| {
@@ -852,7 +852,7 @@ pub fn wait_statement(tokens: TokenList) -> ParseResult<WaitStatement> {
         .with_context_from(ContextType::WaitStatement, tokens)
 }
 
-pub fn global_statement(tokens: TokenList) -> ParseResult<GlobalStatement> {
+pub fn global_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, GlobalStatement<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::Global)
         .determines(|tokens, global| {
@@ -861,9 +861,9 @@ pub fn global_statement(tokens: TokenList) -> ParseResult<GlobalStatement> {
         .with_context_from(ContextType::GlobalStatement, tokens)
 }
 
-pub fn globalize_all_functions_statement(
-    tokens: TokenList,
-) -> ParseResult<GlobalizeAllFunctionsStatement> {
+pub fn globalize_all_functions_statement<'a, Tokens: TokenIter<'a>>(
+    tokens: Tokens,
+) -> ParseResult<'a, GlobalizeAllFunctionsStatement<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::GlobalizeAllFunctions)
         .map_val(|globalize_all_functions| GlobalizeAllFunctionsStatement {
@@ -871,7 +871,7 @@ pub fn globalize_all_functions_statement(
         })
 }
 
-pub fn untyped_statement(tokens: TokenList) -> ParseResult<UntypedStatement> {
+pub fn untyped_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, UntypedStatement<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::Untyped)
         .map_val(|untyped| UntypedStatement { untyped })

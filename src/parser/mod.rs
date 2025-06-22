@@ -27,10 +27,10 @@ use crate::Flavor;
 
 use crate::lexer::TokenItem;
 use crate::parser::statement::statement;
-use crate::parser::token_list::TokenList;
+use crate::parser::token_list::{TokenIter, TokenList};
 use crate::parser::token_list_ext::TokenListExt;
 
-type ParseResult<'s, T> = Result<(TokenList<'s>, T), ParseError>;
+type ParseResult<'s, T, L> = Result<(L, T), ParseError>;
 
 /// Parses an input token list into a syntax tree.
 ///

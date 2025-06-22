@@ -2,13 +2,13 @@ use crate::ast::{ClassDefinition, ClassExtends, ClassMember, Precedence};
 use crate::parser::expression::{expression, table_delimited};
 use crate::parser::parse_result_ext::ParseResultExt;
 use crate::parser::slot::slot;
-use crate::parser::token_list::TokenList;
+use crate::parser::token_list::{TokenIter};
 use crate::parser::token_list_ext::TokenListExt;
 use crate::parser::ParseResult;
 use crate::token::TerminalToken;
 use crate::{ContextType, ParseErrorType};
 
-pub fn class_definition(tokens: TokenList) -> ParseResult<ClassDefinition> {
+pub fn class_definition<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, ClassDefinition<'a>, Tokens> {
     let (tokens, extends) = class_extends(tokens).maybe(tokens)?;
     let (tokens, (open, members, close)) = tokens.terminal(TerminalToken::OpenBrace).opens(
         ContextType::Span,
@@ -31,13 +31,13 @@ pub fn class_definition(tokens: TokenList) -> ParseResult<ClassDefinition> {
     ))
 }
 
-pub fn class_extends(tokens: TokenList) -> ParseResult<ClassExtends> {
+pub fn class_extends<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, ClassExtends<'a>, Tokens> {
     let (tokens, extends) = tokens.terminal(TerminalToken::Extends)?;
     let (tokens, name) = expression(tokens, Precedence::None)?;
     Ok((tokens, ClassExtends { extends, name }))
 }
 
-pub fn class_member(tokens: TokenList) -> ParseResult<ClassMember> {
+pub fn class_member<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, ClassMember<'a>, Tokens> {
     let (tokens, attributes) = table_delimited(
         tokens,
         TerminalToken::OpenAttributes,

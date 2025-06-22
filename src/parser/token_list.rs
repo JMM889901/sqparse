@@ -8,8 +8,22 @@ pub struct TokenList<'s> {
     index: usize,
 }
 
-impl<'s> TokenList<'s> {
-    pub fn new(flavor: Flavor, tokens: &'s [TokenItem<'s>]) -> Self {
+
+
+pub trait TokenIter<'s> : Copy{
+    fn new(flavor: Flavor, tokens: &'s [TokenItem<'s>]) -> Self;
+    fn flavor(self) -> Flavor;
+    fn previous(self) -> Option<&'s TokenItem<'s>>;
+    fn next(self) -> Option<&'s TokenItem<'s>>;
+    fn is_ended(self) -> bool;
+    fn start_index(self) -> usize;
+    fn is_newline(self) -> bool;
+    fn split_first(self) -> Option<(Self, &'s TokenItem<'s>)>;
+    fn split_at(self, index: usize) -> (Self, Self);
+}
+impl<'s> TokenIter<'s> for TokenList<'s> {
+
+    fn new(flavor: Flavor, tokens: &'s [TokenItem<'s>]) -> Self {
         TokenList {
             flavor,
             tokens,
@@ -17,11 +31,11 @@ impl<'s> TokenList<'s> {
         }
     }
 
-    pub fn flavor(self) -> Flavor {
+    fn flavor(self) -> Flavor {
         self.flavor
     }
 
-    pub fn previous(self) -> Option<&'s TokenItem<'s>> {
+    fn previous(self) -> Option<&'s TokenItem<'s>> {
         if self.index > 0 {
             self.tokens.get(self.index - 1)
         } else {
@@ -29,25 +43,25 @@ impl<'s> TokenList<'s> {
         }
     }
 
-    pub fn next(self) -> Option<&'s TokenItem<'s>> {
+    fn next(self) -> Option<&'s TokenItem<'s>> {
         self.tokens.get(self.index)
     }
 
-    pub fn is_ended(self) -> bool {
+    fn is_ended(self) -> bool {
         self.index == self.tokens.len()
     }
 
-    pub fn start_index(self) -> usize {
+    fn start_index(self) -> usize {
         self.index
     }
 
-    pub fn is_newline(self) -> bool {
+    fn is_newline(self) -> bool {
         self.previous()
             .map(|item| item.token.new_line.is_some())
             .unwrap_or(false)
     }
 
-    pub fn split_first(self) -> Option<(TokenList<'s>, &'s TokenItem<'s>)> {
+    fn split_first(self) -> Option<(Self, &'s TokenItem<'s>)> {
         self.next().map(|first| {
             (
                 TokenList {
@@ -60,7 +74,7 @@ impl<'s> TokenList<'s> {
         })
     }
 
-    pub fn split_at(self, index: usize) -> (TokenList<'s>, TokenList<'s>) {
+    fn split_at(self, index: usize) -> (TokenList<'s>, TokenList<'s>) {
         assert!(index >= self.index);
         (
             TokenList {

@@ -7,13 +7,13 @@ use crate::parser::function::function_ref_param;
 use crate::parser::identifier::identifier;
 use crate::parser::parse_result_ext::ParseResultExt;
 use crate::parser::struct_::struct_definition;
-use crate::parser::token_list::TokenList;
+use crate::parser::token_list::TokenIter;
 use crate::parser::token_list_ext::TokenListExt;
 use crate::parser::ParseResult;
 use crate::token::TerminalToken;
 use crate::{ContextType, Flavor, ParseErrorType};
 
-pub fn type_(tokens: TokenList) -> ParseResult<Type> {
+pub fn type_<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, Type<'a>, Tokens> {
     // Only SquirrelRespawn supports types. Other flavors only support `local` and `var`.
     if tokens.flavor() != Flavor::SquirrelRespawn {
         return local(tokens).map_val(Type::Local);
@@ -36,7 +36,7 @@ pub fn type_(tokens: TokenList) -> ParseResult<Type> {
     }
 }
 
-fn base(tokens: TokenList) -> ParseResult<Type> {
+fn base<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, Type<'a>, Tokens> {
     local(tokens)
         .map_val(Type::Local)
         .or_try(|| plain(tokens).map_val(Type::Plain))
@@ -45,21 +45,21 @@ fn base(tokens: TokenList) -> ParseResult<Type> {
         .or_error(|| tokens.error(ParseErrorType::ExpectedType))
 }
 
-pub fn local(tokens: TokenList) -> ParseResult<LocalType> {
+pub fn local<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, LocalType<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::Local)
         .map_val(|local| LocalType { local })
 }
 
-pub fn plain(tokens: TokenList) -> ParseResult<PlainType> {
+pub fn plain<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, PlainType<'a>, Tokens> {
     identifier(tokens).map_val(|name| PlainType { name })
 }
 
-pub fn void_function_ref(tokens: TokenList) -> ParseResult<FunctionRefType> {
+pub fn void_function_ref<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, FunctionRefType<'a>, Tokens> {
     function_ref(tokens, || None)
 }
 
-pub fn struct_(tokens: TokenList) -> ParseResult<StructType> {
+pub fn struct_<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, StructType<'a>, Tokens> {
     tokens
         .terminal(TerminalToken::Struct)
         .determines(|tokens, struct_| {
@@ -77,7 +77,7 @@ impl<'s> TypeRef<'_, 's> {
     }
 }
 
-fn modifier<'s>(tokens: TokenList<'s>, left: TypeRef<'_, 's>) -> ParseResult<'s, Type<'s>> {
+fn modifier<'s, Tokens: TokenIter<'s>>(tokens: Tokens, left: TypeRef<'_, 's>) -> ParseResult<'s, Type<'s>, Tokens> {
     let left_ref = left.0;
 
     array(tokens, TypeRef(left_ref))
@@ -89,7 +89,7 @@ fn modifier<'s>(tokens: TokenList<'s>, left: TypeRef<'_, 's>) -> ParseResult<'s,
         .or_error(|| tokens.error(ParseErrorType::ExpectedTypeModifier))
 }
 
-fn array<'s>(tokens: TokenList<'s>, left: TypeRef<'_, 's>) -> ParseResult<'s, ArrayType<'s>> {
+fn array<'s, Tokens: TokenIter<'s>>(tokens: Tokens, left: TypeRef<'_, 's>) -> ParseResult<'s, ArrayType<'s>, Tokens> {
     tokens.terminal(TerminalToken::OpenSquare).opens(
         ContextType::Expression,
         |tokens| tokens.terminal(TerminalToken::CloseSquare),
@@ -104,7 +104,7 @@ fn array<'s>(tokens: TokenList<'s>, left: TypeRef<'_, 's>) -> ParseResult<'s, Ar
     )
 }
 
-fn generic<'s>(tokens: TokenList<'s>, left: TypeRef<'_, 's>) -> ParseResult<'s, GenericType<'s>> {
+fn generic<'s, Tokens: TokenIter<'s>>(tokens: Tokens, left: TypeRef<'_, 's>) -> ParseResult<'s, GenericType<'s>, Tokens> {
     tokens
         .terminal(TerminalToken::Less)
         .determines(|tokens, open| {
@@ -133,17 +133,17 @@ fn generic<'s>(tokens: TokenList<'s>, left: TypeRef<'_, 's>) -> ParseResult<'s, 
         .with_context_from(ContextType::GenericArgumentList, tokens)
 }
 
-fn typed_function_ref<'s>(
-    tokens: TokenList<'s>,
+fn typed_function_ref<'s, Tokens: TokenIter<'s>>(
+    tokens: Tokens,
     left: TypeRef<'_, 's>,
-) -> ParseResult<'s, FunctionRefType<'s>> {
+) -> ParseResult<'s, FunctionRefType<'s>, Tokens> {
     function_ref(tokens, || Some(left.take()))
 }
 
-fn reference<'s>(
-    tokens: TokenList<'s>,
+fn reference<'s, Tokens: TokenIter<'s>>(
+    tokens: Tokens,
     left: TypeRef<'_, 's>,
-) -> ParseResult<'s, ReferenceType<'s>> {
+) -> ParseResult<'s, ReferenceType<'s>, Tokens> {
     tokens
         .terminal(TerminalToken::BitwiseAnd)
         .map_val(|reference| ReferenceType {
@@ -152,7 +152,7 @@ fn reference<'s>(
         })
 }
 
-fn nullable<'s>(tokens: TokenList<'s>, left: TypeRef<'_, 's>) -> ParseResult<'s, NullableType<'s>> {
+fn nullable<'s, Tokens: TokenIter<'s>>(tokens: Tokens, left: TypeRef<'_, 's>) -> ParseResult<'s, NullableType<'s>, Tokens> {
     tokens
         .terminal(TerminalToken::OrNull)
         .map_val(|ornull| NullableType {
@@ -161,10 +161,10 @@ fn nullable<'s>(tokens: TokenList<'s>, left: TypeRef<'_, 's>) -> ParseResult<'s,
         })
 }
 
-fn function_ref<'s>(
-    tokens: TokenList<'s>,
+fn function_ref<'s, Tokens: TokenIter<'s>>(
+    tokens: Tokens,
     return_type: impl FnOnce() -> Option<Type<'s>>,
-) -> ParseResult<'s, FunctionRefType<'s>> {
+) -> ParseResult<'s, FunctionRefType<'s>, Tokens> {
     tokens
         .terminal(TerminalToken::FunctionRef)
         .determines(|tokens, functionref| {

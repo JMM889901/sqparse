@@ -1,14 +1,14 @@
 use crate::parser::error::TokenAffinity;
-use crate::parser::token_list::TokenList;
+use crate::parser::token_list::TokenIter;
 use crate::parser::token_list_ext::TokenListExt;
 use crate::parser::ParseResult;
 use crate::{ContextType, ParseError, ParseErrorType};
 use std::ops::Range;
 
-pub trait ParseResultExt<'s, T>: Sized {
-    fn into_parse_result(self) -> ParseResult<'s, T>;
+pub trait ParseResultExt<'s, T, I: TokenIter<'s>>: Sized {
+    fn into_parse_result(self) -> ParseResult<'s, T, I>;
 
-    fn maybe(self, tokens: TokenList<'s>) -> ParseResult<'s, Option<T>> {
+    fn maybe(self, tokens: I) -> ParseResult<'s, Option<T>, I> {
         match self.into_parse_result() {
             Ok((tokens, val)) => Ok((tokens, Some(val))),
             Err(err) if err.is_fatal => Err(err),
@@ -16,15 +16,15 @@ pub trait ParseResultExt<'s, T>: Sized {
         }
     }
 
-    fn not_definite(self) -> ParseResult<'s, T> {
+    fn not_definite(self) -> ParseResult<'s, T, I> {
         self.into_parse_result().map_err(|err| err.into_non_fatal())
     }
 
-    fn definite(self) -> ParseResult<'s, T> {
+    fn definite(self) -> ParseResult<'s, T, I> {
         self.into_parse_result().map_err(|err| err.into_fatal())
     }
 
-    fn not_line_ending(self) -> ParseResult<'s, T> {
+    fn not_line_ending(self) -> ParseResult<'s, T, I> {
         let (tokens, val) = self.into_parse_result()?;
         if tokens.is_newline() {
             Err(tokens.error(ParseErrorType::IllegalLineBreak))
@@ -33,11 +33,11 @@ pub trait ParseResultExt<'s, T>: Sized {
         }
     }
 
-    fn map_val<B, F: FnOnce(T) -> B>(self, map: F) -> ParseResult<'s, B> {
+    fn map_val<B, F: FnOnce(T) -> B>(self, map: F) -> ParseResult<'s, B, I> {
         self.into_parse_result().map(|(tokens, a)| (tokens, map(a)))
     }
 
-    fn or_try<F: FnOnce() -> ParseResult<'s, T>>(self, f: F) -> ParseResult<'s, T> {
+    fn or_try<F: FnOnce() -> ParseResult<'s, T, I>>(self, f: F) -> ParseResult<'s, T, I> {
         match self.into_parse_result() {
             Ok((tokens, val)) => Ok((tokens, val)),
             Err(err) if err.is_fatal => Err(err),
@@ -45,15 +45,15 @@ pub trait ParseResultExt<'s, T>: Sized {
         }
     }
 
-    fn or_error<F: FnOnce() -> ParseError>(self, f: F) -> ParseResult<'s, T> {
+    fn or_error<F: FnOnce() -> ParseError>(self, f: F) -> ParseResult<'s, T, I> {
         self.or_try(|| Err(f()))
     }
 
-    fn with_context(self, ty: ContextType, range: Range<usize>) -> ParseResult<'s, T> {
+    fn with_context(self, ty: ContextType, range: Range<usize>) -> ParseResult<'s, T, I> {
         self.replace_context(ContextType::Span, ty, range)
     }
 
-    fn with_context_from(self, ty: ContextType, tokens: TokenList) -> ParseResult<'s, T> {
+    fn with_context_from(self, ty: ContextType, tokens: impl TokenIter<'s>) -> ParseResult<'s, T, I> {
         self.replace_context_from(ContextType::Span, ty, tokens)
     }
 
@@ -62,7 +62,7 @@ pub trait ParseResultExt<'s, T>: Sized {
         from_ty: ContextType,
         to_ty: ContextType,
         range: Range<usize>,
-    ) -> ParseResult<'s, T> {
+    ) -> ParseResult<'s, T, I> {
         self.into_parse_result()
             .map_err(|err| err.replace_context(from_ty, to_ty, range, TokenAffinity::Inline))
     }
@@ -71,8 +71,8 @@ pub trait ParseResultExt<'s, T>: Sized {
         self,
         from_ty: ContextType,
         to_ty: ContextType,
-        tokens: TokenList,
-    ) -> ParseResult<'s, T> {
+        tokens: impl TokenIter<'s>,
+    ) -> ParseResult<'s, T, I> {
         let start_index = tokens.start_index();
         self.into_parse_result().map_err(|err| {
             let range = start_index..err.token_index;
@@ -80,10 +80,10 @@ pub trait ParseResultExt<'s, T>: Sized {
         })
     }
 
-    fn determines<B, F: FnOnce(TokenList<'s>, T) -> ParseResult<'s, B>>(
+    fn determines<B, F: FnOnce(I, T) -> ParseResult<'s, B, I>>(
         self,
         f: F,
-    ) -> ParseResult<'s, B> {
+    ) -> ParseResult<'s, B, I> {
         let (tokens, a) = self.into_parse_result().not_definite()?;
         f(tokens, a).definite()
     }
@@ -91,14 +91,14 @@ pub trait ParseResultExt<'s, T>: Sized {
     fn opens<
         Close,
         Out,
-        FClose: Fn(TokenList<'s>) -> ParseResult<'s, Close>,
-        FInner: FnOnce(TokenList<'s>, T, Close) -> ParseResult<'s, Out>,
+        FClose: Fn(I) -> ParseResult<'s, Close, I>,
+        FInner: FnOnce(I, T, Close) -> ParseResult<'s, Out, I>,
     >(
         self,
         context: ContextType,
         close: FClose,
         inner: FInner,
-    ) -> ParseResult<'s, Out> {
+    ) -> ParseResult<'s, Out, I> {
         let (tokens, open_val) = self.into_parse_result()?;
         let close_index = tokens.previous().unwrap().close_index.unwrap();
         let span_range = (tokens.start_index() - 1)..(close_index + 1);
@@ -132,14 +132,14 @@ pub trait ParseResultExt<'s, T>: Sized {
     fn determines_and_opens<
         Close,
         Out,
-        FClose: Fn(TokenList<'s>) -> ParseResult<'s, Close>,
-        FInner: FnOnce(TokenList<'s>, T, Close) -> ParseResult<'s, Out>,
+        FClose: Fn(I) -> ParseResult<'s, Close, I>,
+        FInner: FnOnce(I, T, Close) -> ParseResult<'s, Out, I>,
     >(
         self,
         context: ContextType,
         close: FClose,
         inner: FInner,
-    ) -> ParseResult<'s, Out> {
+    ) -> ParseResult<'s, Out, I> {
         let (tokens, open_val) = self.into_parse_result().not_definite()?;
         Ok((tokens, open_val))
             .opens(context, close, inner)
@@ -147,9 +147,9 @@ pub trait ParseResultExt<'s, T>: Sized {
     }
 }
 
-impl<'s, T> ParseResultExt<'s, T> for ParseResult<'s, T> {
+impl<'s, T, I: TokenIter<'s>> ParseResultExt<'s, T, I> for ParseResult<'s, T, I> {
     #[inline]
-    fn into_parse_result(self) -> ParseResult<'s, T> {
+    fn into_parse_result(self) -> ParseResult<'s, T, I> {
         self
     }
 }
