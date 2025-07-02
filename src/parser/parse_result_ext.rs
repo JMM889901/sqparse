@@ -101,7 +101,7 @@ pub trait ParseResultExt<'s, T, I: TokenIter<'s>>: Sized {
     ) -> ParseResult<'s, Out, I> {
         let (tokens, open_val) = self.into_parse_result()?;
         let close_index = tokens.previous().unwrap().close_index.unwrap();
-        let span_range = (tokens.start_index() - 1)..(close_index + 1);
+        let span_range = (tokens.previous_index().unwrap_or(0))..(close_index + 1);
 
         let (inner_tokens, outer_tokens) = tokens.split_at(close_index);
         let (outer_tokens, close_val) =

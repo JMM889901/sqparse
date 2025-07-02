@@ -22,12 +22,13 @@ mod preprocessed;
 
 pub use self::context::ContextType;
 pub use self::error::{ParseError, ParseErrorContext, ParseErrorType};
+pub use self::token_list::TokenIter;
 use crate::ast::Program;
 use crate::Flavor;
 
 use crate::lexer::TokenItem;
 use crate::parser::statement::statement;
-use crate::parser::token_list::{TokenIter, TokenList};
+use crate::parser::token_list::{TokenList};
 use crate::parser::token_list_ext::TokenListExt;
 
 type ParseResult<'s, T, L> = Result<(L, T), ParseError>;
@@ -56,7 +57,13 @@ type ParseResult<'s, T, L> = Result<(L, T), ParseError>;
 /// ```
 pub fn parse<'s>(items: &'s [TokenItem<'s>], flavor: Flavor) -> Result<Program<'s>, ParseError> {
     let tokens = TokenList::new(flavor, items);
+    parse_tokens(tokens)
+}
+
+
+pub fn parse_tokens<'s>(tokens: impl TokenIter<'s>) -> Result<Program<'s>, ParseError> {
     let (tokens, statements) = tokens.many_until_ended(statement)?;
     assert!(tokens.is_ended());
     Ok(Program { statements })
 }
+

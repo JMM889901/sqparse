@@ -8,13 +8,22 @@ pub struct TokenList<'s> {
     index: usize,
 }
 
+impl TokenList<'_> {
+    pub fn new<'s>(flavor: Flavor, tokens: &'s [TokenItem<'s>]) -> TokenList<'s> {
+        TokenList {
+            flavor,
+            tokens,
+            index: 0,
+        }
+    }
+}
 
 
 pub trait TokenIter<'s> : Copy{
-    fn new(flavor: Flavor, tokens: &'s [TokenItem<'s>]) -> Self;
     fn flavor(self) -> Flavor;
     fn previous(self) -> Option<&'s TokenItem<'s>>;
     fn next(self) -> Option<&'s TokenItem<'s>>;
+    fn previous_index(&self) -> Option<usize>;
     fn is_ended(self) -> bool;
     fn start_index(self) -> usize;
     fn is_newline(self) -> bool;
@@ -23,11 +32,11 @@ pub trait TokenIter<'s> : Copy{
 }
 impl<'s> TokenIter<'s> for TokenList<'s> {
 
-    fn new(flavor: Flavor, tokens: &'s [TokenItem<'s>]) -> Self {
-        TokenList {
-            flavor,
-            tokens,
-            index: 0,
+    fn previous_index(&self) -> Option<usize> {
+        if self.index > 0 {
+            Some(self.index - 1)
+        } else {
+            None
         }
     }
 
