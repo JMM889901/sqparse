@@ -406,6 +406,7 @@ pub struct Token<'s> {
 
     /// If this token ends a line, includes any comments between the token and newline.
     pub new_line: Option<TokenLine<'s>>,
+
 }
 
 /// A line of source input in a [`Token`].

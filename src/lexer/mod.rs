@@ -29,7 +29,24 @@ pub struct TokenItem<'s> {
     /// ```
     /// In this example, the opening `{` token would have a `close_index` of 5, the index of the
     /// closing delimiter.
-    pub close_index: Option<usize>,
+    /// 
+    /// Errec note: Unfortunately, this is not really accurate in the presence of preprocessor statements.
+    /// While in practice its probably still accurate *most* of the time, the lexer does not yet know where the ture end is 
+    /// 
+    /// # Example
+    /// ```text
+    /// #if SERVER
+    /// void function Guh() {
+    /// #else
+    /// void function Buh() {    
+    /// #endif
+    ///     ...
+    /// }
+    /// 
+    /// Guh has no end token, wheras buh has the end token, however they actually have the same end token
+    /// By the reverse logic, a function can also have multiple end tokens
+    /// So the logic needs to be moved to a preprocessor aware step like parsing
+    pub close_index: Option<usize>,//TODO: Remove this, see above
 }
 
 // Returns the token that closes a tree, if the provided token is a valid opening token.
@@ -192,6 +209,8 @@ pub fn tokenize(val: &str, flavor: Flavor) -> TokenizeResult {
 
     // If there are remaining layers, there are one or more unmatched opening tokens. Otherwise
     // at this point tokenization is successful.
+    // Errec note: This used to just error, now uses a vec of errors
+    // Technically this is a bit wonky, but i dont actually use close_index anyway so womp
     match layers.back() {
         None => (),
         Some(layer) => {
