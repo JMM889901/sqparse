@@ -23,7 +23,6 @@ pub trait TokenIter<'s> : Copy{
     fn flavor(self) -> Flavor;
     fn previous(self) -> Option<&'s TokenItem<'s>>;
     fn next(self) -> Option<&'s TokenItem<'s>>;
-    fn previous_index(&self) -> Option<usize>;
     fn is_ended(self) -> bool;
     fn start_index(self) -> usize;
     fn is_newline(self) -> bool;
@@ -31,14 +30,6 @@ pub trait TokenIter<'s> : Copy{
     fn split_at(self, index: usize) -> (Self, Self);
 }
 impl<'s> TokenIter<'s> for TokenList<'s> {
-
-    fn previous_index(&self) -> Option<usize> {
-        if self.index > 0 {
-            Some(self.index - 1)
-        } else {
-            None
-        }
-    }
 
     fn flavor(self) -> Flavor {
         self.flavor

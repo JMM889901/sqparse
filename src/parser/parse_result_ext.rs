@@ -90,59 +90,78 @@ pub trait ParseResultExt<'s, T, I: TokenIter<'s>>: Sized {
 
     fn opens<
         Close,
+        Components,
         Out,
         FClose: Fn(I) -> ParseResult<'s, Close, I>,
-        FInner: FnOnce(I, T, Close) -> ParseResult<'s, Out, I>,
+        FInner: FnOnce(I) -> ParseResult<'s, Components, I>,
+        FAssemble: FnOnce(I, T, Components, Close) -> ParseResult<'s, Out, I>,
+        //^This should not really output parseresult, but it makes it faster for me to rewrite all the uses of this function
     >(
         self,
         context: ContextType,
         close: FClose,
         inner: FInner,
+        assemble: FAssemble,
     ) -> ParseResult<'s, Out, I> {
+        //Errec note: This is a hopefully temporary hacky workaround, since close_index is no longer known at this point
         let (tokens, open_val) = self.into_parse_result()?;
-        let close_index = tokens.previous().unwrap().close_index.unwrap();
-        let span_range = (tokens.previous_index().unwrap_or(0))..(close_index + 1);
+        //let close_index = tokens.previous().unwrap().close_index.unwrap();
+        //let span_range = (tokens.previous_index().unwrap_or(0))..(close_index + 1);
 
-        let (inner_tokens, outer_tokens) = tokens.split_at(close_index);
-        let (outer_tokens, close_val) =
-            close(outer_tokens).with_context(context, span_range.clone())?;
-        let (inner_tokens, value) =
-            inner(inner_tokens, open_val, close_val).with_context(context, span_range.clone())?;
+        //let (inner_tokens, outer_tokens) = tokens.split_at(close_index);
+        //let (outer_tokens, close_val) =
+            //close(outer_tokens).with_context(context, span_range.clone())?;
+        let start = tokens.start_index();
 
-        if !inner_tokens.is_ended() {
-            let mut remaining_tokens = inner_tokens;
+        // Errec note: I legitimately do not know if this will work, i dont think it should?
+        let res = inner(tokens);
+        let end = match &res {
+            Ok((tokens, _)) => tokens.start_index(),
+            Err(err) => err.token_index,
+        };
+        let (tokens, value) = res.with_context(context, start..end)?;
+
+        let (tokens, close_val) =
+            close(tokens).with_context(context, start..tokens.start_index())?;
+        let (final_tokens, result) = assemble(tokens, open_val, value, close_val)
+            .with_context(context, start..tokens.start_index())?;
+        //if !tokens.is_ended() {
+            //let mut remaining_tokens = tokens;
 
             // Hack to trigger an error with the close parser, since the inner parser did not
             // consume all of the input.
-            loop {
+            /*loop {
                 let (new_tokens, _) =
-                    close(remaining_tokens).with_context(context, span_range.clone())?;
+                    close(remaining_tokens)?;//.with_context(context, span_range.clone())?; TODO: Add this back but different
 
                 // If parsing succeeded with no input tokens, something has gone wrong and we don't
                 // want to loop forever.
                 assert!(!remaining_tokens.is_ended());
 
                 remaining_tokens = new_tokens;
-            }
-        }
+            }*/
+        //}
 
-        Ok((outer_tokens, value))
+        Ok((final_tokens, result))
     }
 
     fn determines_and_opens<
         Close,
+        Components,
         Out,
         FClose: Fn(I) -> ParseResult<'s, Close, I>,
-        FInner: FnOnce(I, T, Close) -> ParseResult<'s, Out, I>,
+        FInner: FnOnce(I) -> ParseResult<'s, Components, I>,
+        FAssemble: FnOnce(I, T, Components, Close) -> ParseResult<'s, Out, I>,
     >(
         self,
         context: ContextType,
         close: FClose,
         inner: FInner,
+        assemble: FAssemble,
     ) -> ParseResult<'s, Out, I> {
         let (tokens, open_val) = self.into_parse_result().not_definite()?;
         Ok((tokens, open_val))
-            .opens(context, close, inner)
+            .opens(context, close, inner, assemble)
             .definite()
     }
 }

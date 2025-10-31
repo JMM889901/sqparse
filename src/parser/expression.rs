@@ -90,12 +90,11 @@ pub fn parens<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, Pare
         .determines_and_opens(
             ContextType::Expression,
             |tokens| tokens.terminal(TerminalToken::CloseBracket),
-            |tokens, open, close| {
-                expression(tokens, Precedence::None).map_val(|value| ParensExpression {
-                    open,
-                    value,
-                    close,
-                })
+            |tokens| {
+                expression(tokens, Precedence::None)
+            },
+            |tokens, open, value, close| {
+                Ok((tokens, ParensExpression { open, value, close }))
             },
         )
 }
@@ -140,13 +139,16 @@ pub fn table_delimited<'a, Tokens: TokenIter<'a>>(
     tokens.terminal(open_terminal).determines_and_opens(
         ContextType::TableLiteral,
         |tokens| tokens.terminal(close_terminal),
-        |tokens, open, close| {
+        |tokens| {
             let (tokens, slots) = tokens.many_until(
-                |tokens| tokens.is_ended() || tokens.terminal(TerminalToken::Ellipsis).is_ok(),
+                |tokens| tokens.terminal(close_terminal).is_ok() || tokens.terminal(TerminalToken::Ellipsis).is_ok(),
                 // table_slot,
                 possibly_preprocessed_table_slot,
             )?;
             let (tokens, spread) = tokens.terminal(TerminalToken::Ellipsis).maybe(tokens)?;
+            Ok((tokens, (slots, spread)))
+        },
+        |tokens, open, (slots, spread), close| {
             Ok((
                 tokens,
                 TableExpression {
@@ -175,12 +177,18 @@ pub fn array<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, Array
         .determines_and_opens(
             ContextType::ArrayLiteral,
             |tokens| tokens.terminal(TerminalToken::CloseSquare),
-            |tokens, open, close| {
+            |tokens| {
                 let (tokens, values) = tokens.many_until(
-                    |tokens| tokens.is_ended() || tokens.terminal(TerminalToken::Ellipsis).is_ok(),
+                    |tokens| tokens.terminal(TerminalToken::CloseSquare).is_ok() || tokens.terminal(TerminalToken::Ellipsis).is_ok(),
                     possibly_preprocessed_array_value,
                 )?;
                 let (tokens, spread) = tokens.terminal(TerminalToken::Ellipsis).maybe(tokens)?;
+                Ok((
+                    tokens,
+                    (values, spread),
+                ))
+            },
+            |tokens, open, (values, spread), close| {
                 Ok((
                     tokens,
                     ArrayExpression {
@@ -253,8 +261,10 @@ pub fn expect<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, Expe
             tokens.terminal(TerminalToken::OpenBracket).opens(
                 ContextType::Expression,
                 |tokens| tokens.terminal(TerminalToken::CloseBracket),
-                |tokens, open, close| {
-                    let (tokens, value) = expression(tokens, Precedence::None)?;
+                |tokens| {
+                    expression(tokens, Precedence::None)
+                },
+                |tokens, open, value, close| {
                     Ok((
                         tokens,
                         ExpectExpression {
@@ -265,7 +275,7 @@ pub fn expect<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, Expe
                             close,
                         },
                     ))
-                },
+                }
             )
         })
 }
@@ -278,8 +288,10 @@ pub fn lambda<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, Lamb
                 tokens.terminal(TerminalToken::OpenBracket).opens(
                     ContextType::FunctionParamList,
                     |tokens| tokens.terminal(TerminalToken::CloseBracket),
-                    |tokens, open, close| {
-                        let (tokens, params) = function_params(tokens)?;
+                    |tokens| {
+                        function_params(tokens)
+                    },
+                    |tokens, open, params, close| {
                         Ok((tokens, (open, params, close)))
                     },
                 )?;
@@ -417,13 +429,19 @@ fn index<'s, Tokens: TokenIter<'s>>(
         .determines_and_opens(
             ContextType::Expression,
             |tokens| tokens.terminal(TerminalToken::CloseSquare),
-            |tokens, open, close| {
-                expression(tokens, Precedence::None).map_val(|index| IndexExpression {
-                    base: left.take(),
-                    open,
-                    index,
-                    close,
-                })
+            |tokens| {
+                expression(tokens, Precedence::None)
+            },
+            |tokens, open, value, close| {
+                Ok((
+                    tokens,
+                    IndexExpression {
+                        base: left.take(),
+                        open,
+                        index: value,
+                        close,
+                    },
+                ))
             },
         )
 }
@@ -474,10 +492,15 @@ fn call<'s, Tokens: TokenIter<'s>>(
         .determines_and_opens(
             ContextType::CallArgumentList,
             |tokens| tokens.terminal(TerminalToken::CloseBracket),
-            |tokens, open, close| {
+            |tokens| {
                 tokens
-                    .many_until_ended(call_argument)
-                    .map_val(|args| (open, args, close))
+                    .many(call_argument)
+            },
+            |tokens, open, arguments, close| {
+                Ok((
+                    tokens,
+                    (open, arguments, close),
+                ))
             },
         )
         .and_then(|(tokens, (open, arguments, close))| {

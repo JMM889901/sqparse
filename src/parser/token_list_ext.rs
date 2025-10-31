@@ -207,7 +207,7 @@ pub trait TokenListExt<'s>: TokenIter<'s> + Sized {
             last_item: Box::new(first_item),
         };
 
-        while let (next_tokens, Some(separator)) = parse_separator(tokens).maybe(tokens)? {
+        while let Ok((next_tokens, Some(separator))) = parse_separator(tokens).maybe(tokens) {
             let (next_tokens, Some(next_item)) = parse_item(next_tokens).maybe(next_tokens)? else {
                 return Ok((next_tokens, list.into_trailing(Some(separator))));
             };

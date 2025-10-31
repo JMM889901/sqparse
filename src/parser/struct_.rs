@@ -15,14 +15,16 @@ pub fn struct_definition<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResu
     tokens.terminal(TerminalToken::OpenBrace).opens(
         ContextType::Span,
         |tokens| tokens.terminal(TerminalToken::CloseBrace),
-        |tokens, open, close| {
+        |tokens| {
             tokens
-                .many_until_ended(possibly_preprocessed_struct_property)
-                .map_val(|properties| StructDefinition {
-                    open,
-                    properties,
-                    close,
-                })
+                .many(possibly_preprocessed_struct_property)
+        },
+        |tokens, open, properties, close| {
+            Ok((tokens, StructDefinition {
+                open,
+                properties,
+                close,
+            }))
         },
     )
 }

@@ -2,7 +2,7 @@ struct T
 {
 	int sh
 	int sh1
-	#ifCLIENT
+	#if CLIENT
 	#if 2
 	int cl
 	int cl2

@@ -93,13 +93,16 @@ fn array<'s, Tokens: TokenIter<'s>>(tokens: Tokens, left: TypeRef<'_, 's>) -> Pa
     tokens.terminal(TerminalToken::OpenSquare).opens(
         ContextType::Expression,
         |tokens| tokens.terminal(TerminalToken::CloseSquare),
-        |tokens, open, close| {
-            expression(tokens, Precedence::None).map_val(|len| ArrayType {
+        |tokens| {
+            expression(tokens, Precedence::None)
+        },
+        |tokens, open, len, close| {
+            Ok((tokens, ArrayType {
                 base: Box::new(left.take()),
                 open,
                 len,
                 close,
-            })
+            }))
         },
     )
 }
@@ -172,13 +175,15 @@ fn function_ref<'s, Tokens: TokenIter<'s>>(
                 tokens.terminal(TerminalToken::OpenBracket).opens(
                     ContextType::Span,
                     |tokens| tokens.terminal(TerminalToken::CloseBracket),
-                    |tokens, open, close| {
+                    |tokens| {
                         tokens
                             .separated_list_trailing0(function_ref_param, |tokens| {
                                 tokens.terminal(TerminalToken::Comma)
                             })
-                            .map_val(|params| (open, params, close))
                     },
+                    |tokens, open, params, close| {
+                        Ok((tokens, (open, params, close)))
+                    }
                 )?;
 
             Ok((

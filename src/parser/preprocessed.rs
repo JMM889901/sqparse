@@ -10,6 +10,10 @@ use super::{
     token_list_ext::TokenListExt, ParseResult,
 };
 
+
+//Errec note: This entire thing is arguably pointless because i a seperate step for preprocessing, this should never be hit
+//Ill keep it somewhat working since i still want to be able to move to a 1-parse model
+
 pub fn preprocessed_if_contents_terminal<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> bool {
     tokens.is_ended()
         || tokens.terminal(TerminalToken::PreprocessorElseIf).is_ok()
@@ -25,12 +29,16 @@ pub fn preprocessed_if<'s, Tokens: TokenIter<'s>, T, FnParser: Fn(Tokens) -> Par
         .determines_and_opens(
             ContextType::PreProcessorIf,
             |tokens| tokens.terminal(TerminalToken::PreprocessorEndIf),
-            |tokens, if_, endif| {
+            |tokens| {
                 let (tokens, condition) = expression(tokens, Precedence::None)?;
                 let (tokens, content) = parser(tokens)?;
                 let (tokens, elseif) = preprocessed_elseif(tokens, &parser).maybe(tokens)?;
                 let (tokens, else_) = preprocessed_else(tokens, &parser).maybe(tokens)?;
-
+                Ok((tokens, (
+                    condition, content, elseif, else_
+                )))
+            },
+            |tokens, if_, (condition, content, elseif, else_), endif| {
                 Ok((
                     tokens,
                     Box::new(PreprocessorIfExpression {

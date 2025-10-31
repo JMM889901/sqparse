@@ -19,8 +19,10 @@ pub fn function_definition<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseRe
     let (tokens, (open, params, close)) = tokens.terminal(TerminalToken::OpenBracket).opens(
         ContextType::FunctionParamList,
         |tokens| tokens.terminal(TerminalToken::CloseBracket),
-        |tokens, open, close| {
-            let (tokens, params) = function_params(tokens)?;
+        |tokens| {
+            function_params(tokens)
+        },
+        |tokens, open, params, close| {
             Ok((tokens, (open, params, close)))
         },
     )?;
@@ -48,9 +50,15 @@ pub fn function_environment<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseR
     tokens.terminal(TerminalToken::OpenSquare).opens(
         ContextType::FunctionEnvironment,
         |tokens| tokens.terminal(TerminalToken::CloseSquare),
-        |tokens, open, close| {
-            let (tokens, value) = expression(tokens, Precedence::None)?;
-            Ok((tokens, FunctionEnvironment { open, value, close }))
+        |tokens| {
+            expression(tokens, Precedence::None)
+        },
+        |tokens, open, value, close| {
+            Ok((tokens, FunctionEnvironment {
+                open,
+                value,
+                close,
+            }))
         },
     )
 }
@@ -59,11 +67,12 @@ pub fn function_params<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult
     let (tokens, maybe_list) = tokens.separated_list_trailing0(
         |tokens| {
             let res = function_param(tokens);
-            if tokens.is_ended() || tokens.terminal(TerminalToken::Ellipsis).is_ok() {
+            /*if tokens.is_ended() || tokens.terminal(TerminalToken::Ellipsis).is_ok() {//Errec todo: This is important im pretty sure, i shouldnt just remove this
                 res
             } else {
                 res.definite()
-            }
+            }*/
+            res
         },
         |tokens| tokens.terminal(TerminalToken::Comma),
     )?;
@@ -138,12 +147,14 @@ pub fn function_captures<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResu
                 tokens.terminal(TerminalToken::OpenBracket).opens(
                     ContextType::FunctionCaptureList,
                     |tokens| tokens.terminal(TerminalToken::CloseBracket),
-                    |tokens, open, close| {
+                    |tokens| {
                         tokens
                             .separated_list_trailing0(identifier, |tokens| {
                                 tokens.terminal(TerminalToken::Comma)
                             })
-                            .map_val(|names| (open, names, close))
+                    },
+                    |tokens, open, names, close| {
+                        Ok((tokens, (open, names, close)))
                     },
                 )?;
 

@@ -57,11 +57,11 @@ type ParseResult<'s, T, L> = Result<(L, T), ParseError>;
 /// ```
 pub fn parse<'s>(items: &'s [TokenItem<'s>], flavor: Flavor) -> Result<Program<'s>, ParseError> {
     let tokens = TokenList::new(flavor, items);
-    parse_tokens(tokens)
+    parse_iter(tokens)
 }
 
 
-pub fn parse_tokens<'s>(tokens: impl TokenIter<'s>) -> Result<Program<'s>, ParseError> {
+pub fn parse_iter<'s>(tokens: impl TokenIter<'s>) -> Result<Program<'s>, ParseError> {
     let (tokens, statements) = tokens.many_until_ended(statement)?;
     assert!(tokens.is_ended());
     Ok(Program { statements })

@@ -46,7 +46,7 @@ pub struct TokenItem<'s> {
     /// Guh has no end token, wheras buh has the end token, however they actually have the same end token
     /// By the reverse logic, a function can also have multiple end tokens
     /// So the logic needs to be moved to a preprocessor aware step like parsing
-    pub close_index: Option<usize>,//TODO: Remove this, see above
+    pub _close_index: Option<usize>,//TODO: Remove this, see above
 }
 
 // Returns the token that closes a tree, if the provided token is a valid opening token.
@@ -172,7 +172,7 @@ impl <'s> TokenizeResult<'s> {
 /// ```
 pub fn tokenize(val: &str, flavor: Flavor) -> TokenizeResult {
     let mut items: Vec<TokenItem<'_>> = Vec::<TokenItem>::new();
-    let mut layers = VecDeque::<Layer>::new();
+    //let mut layers = VecDeque::<Layer>::new();
     let mut errs = Vec::<LexerError>::new();
 
     for maybe_token in TokenIter::new(val, flavor) {
@@ -185,6 +185,7 @@ pub fn tokenize(val: &str, flavor: Flavor) -> TokenizeResult {
         let token = token.unwrap();
         let token_index = items.len();
 
+        /*
         // If this token matches the top layer's close token, pop the layer.
         if let Some(top_layer) = layers.back() {
             if top_layer.close_ty == token.ty {
@@ -200,10 +201,11 @@ pub fn tokenize(val: &str, flavor: Flavor) -> TokenizeResult {
                 close_ty,
             });
         }
+        */
 
         items.push(TokenItem {
             token,
-            close_index: None,
+            _close_index: None,
         });
     }
 
@@ -211,6 +213,9 @@ pub fn tokenize(val: &str, flavor: Flavor) -> TokenizeResult {
     // at this point tokenization is successful.
     // Errec note: This used to just error, now uses a vec of errors
     // Technically this is a bit wonky, but i dont actually use close_index anyway so womp
+
+    //Errec note 2: this is a nice error to have for where its applicable, will have to remake this in parsing
+    /*
     match layers.back() {
         None => (),
         Some(layer) => {
@@ -224,7 +229,7 @@ pub fn tokenize(val: &str, flavor: Flavor) -> TokenizeResult {
             );
             errs.push(err);
         }
-    };
+    };*/
     if errs.is_empty() {
         TokenizeResult::Ok(items)
     } else {

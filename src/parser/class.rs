@@ -13,10 +13,12 @@ pub fn class_definition<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResul
     let (tokens, (open, members, close)) = tokens.terminal(TerminalToken::OpenBrace).opens(
         ContextType::Span,
         |tokens| tokens.terminal(TerminalToken::CloseBrace),
-        |tokens, open, close| {
+        |tokens| {
             tokens
-                .many_until_ended(class_member)
-                .map_val(|members| (open, members, close))
+                .many(class_member)
+        },
+        |tokens, open, value, close| {
+            Ok((tokens, (open, value, close)))
         },
     )?;
 

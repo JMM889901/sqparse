@@ -14,7 +14,7 @@ use crate::parser::control::{
     for_definition, foreach_index, foreach_value, if_statement_type, switch_case,
 };
 use crate::parser::enum_::enum_entry;
-use crate::parser::expression::expression;
+use crate::parser::expression::{expression, var};
 use crate::parser::function::function_definition;
 use crate::parser::global::global_definition;
 use crate::parser::identifier::identifier;
@@ -49,6 +49,14 @@ pub fn statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a, S
     // Statement can end if the last token is an empty statement.
     if let Some(last_item) = next_tokens.next() {
         if let TokenType::Empty = last_item.token.ty {
+            return Ok((next_tokens, statement));
+        }
+    }
+
+    //Errec: Statement can maybe end if the next token is a }?? i think? maybe? I'm scared
+    //CHECK: _scripttest.gnut 639, does this work right??????
+    if let Some((_, next_item)) = next_tokens.split_first() {
+        if let TokenType::Terminal(TerminalToken::CloseBrace) = next_item.token.ty {
             return Ok((next_tokens, statement));
         }
     }
@@ -143,16 +151,11 @@ pub fn block_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult
         .determines_and_opens(
             ContextType::BlockStatement,
             |tokens| tokens.terminal(TerminalToken::CloseBrace),
-            |tokens, open, close| {
-                let (tokens, statements) = tokens.many_until_ended(statement)?;
-                Ok((
-                    tokens,
-                    BlockStatement {
-                        open,
-                        statements,
-                        close,
-                    },
-                ))
+            |tokens| {
+                tokens.many(statement)//Errec todo: This is bad and kind of a result of my changing things i shouldnt
+            },
+            |tokens, open, statements, close| {
+                Ok((tokens, BlockStatement { open, statements, close }))
             },
         )
 }
@@ -179,10 +182,25 @@ pub fn preprocessed_documentation_statement<'a, Tokens: TokenIter<'a>>(
                 .determines_and_opens(
                     ContextType::PreProcessorDocumentationStatement,
                     |tokens| tokens.terminal(TerminalToken::CloseBracket),
-                    |tokens, open, close| {
+                    |tokens| {
+                        let optional_class = var(tokens);
+                        let tokens = match optional_class {
+                            Ok((new_tokens, _)) => {
+                                match new_tokens.terminal(TerminalToken::Comma) {
+                                    Ok((new_tokens, _)) => new_tokens,
+                                    Err(_) => tokens,
+                                }
+                            }
+                            Err(_) => tokens,
+                        };
                         let (tokens, (property, property_token)) = string_literal(tokens)?;
                         let (tokens, seperator) = tokens.terminal(TerminalToken::Comma)?;
                         let (tokens, (help_text, help_text_token)) = string_literal(tokens)?;
+                        Ok((tokens, 
+                            (property, property_token, seperator, help_text, help_text_token),
+                        ))
+                    },
+                    |tokens, open, (property, property_token, seperator, help_text, help_text_token), close| {
                         Ok((
                             tokens,
                             (
@@ -222,9 +240,11 @@ pub fn if_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'a
                 tokens.terminal(TerminalToken::OpenBracket).opens(
                     ContextType::IfStatementCondition,
                     |tokens| tokens.terminal(TerminalToken::CloseBracket),
-                    |tokens, open, close| {
+                    |tokens| {
                         expression(tokens, Precedence::None)
-                            .map_val(|condition| (open, condition, close))
+                    },
+                    |tokens, open, condition, close| {
+                        Ok((tokens, (open, condition, close)))
                     },
                 )?;
             let (tokens, ty) = if_statement_type(tokens)?;
@@ -251,9 +271,11 @@ pub fn while_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult
                 tokens.terminal(TerminalToken::OpenBracket).opens(
                     ContextType::WhileStatementCondition,
                     |tokens| tokens.terminal(TerminalToken::CloseBracket),
-                    |tokens, open, close| {
+                    |tokens| {
                         expression(tokens, Precedence::None)
-                            .map_val(|condition| (open, condition, close))
+                    },
+                    |tokens, open, condition, close| {
+                        Ok((tokens, (open, condition, close)))
                     },
                 )?;
             let (tokens, body) = statement_type(tokens).replace_context_from(
@@ -291,9 +313,11 @@ pub fn do_while_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseRes
                 tokens.terminal(TerminalToken::OpenBracket).opens(
                     ContextType::DoWhileStatementCondition,
                     |tokens| tokens.terminal(TerminalToken::CloseBracket),
-                    |tokens, open, close| {
+                    |tokens| {
                         expression(tokens, Precedence::None)
-                            .map_val(|condition| (open, condition, close))
+                    },
+                    |tokens, open, condition, close| {
+                        Ok((tokens, (open, condition, close)))
                     },
                 )?;
 
@@ -320,21 +344,25 @@ pub fn switch_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResul
                 tokens.terminal(TerminalToken::OpenBracket).opens(
                     ContextType::SwitchStatementCondition,
                     |tokens| tokens.terminal(TerminalToken::CloseBracket),
-                    |tokens, open, close| {
+                    |tokens| {
                         expression(tokens, Precedence::None)
-                            .map_val(|condition| (open, condition, close))
                     },
+                    |tokens, open, condition, close| {
+                        Ok((tokens, (open, condition, close)))
+                    }
                 )?;
 
             let (tokens, (open_cases, cases, close_cases)) =
                 tokens.terminal(TerminalToken::OpenBrace).opens(
                     ContextType::Span,
                     |tokens| tokens.terminal(TerminalToken::CloseBrace),
-                    |tokens, open, close| {
+                    |tokens| {
                         tokens
-                            .many_until_ended(switch_case)
-                            .map_val(|cases| (open, cases, close))
+                            .many(switch_case)
                     },
+                    |tokens, open, cases, close| {
+                        Ok((tokens, (open, cases, close)))
+                    }
                 )?;
 
             Ok((
@@ -363,24 +391,21 @@ pub fn for_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResult<'
             ) = tokens.terminal(TerminalToken::OpenBracket).opens(
                 ContextType::ForStatementCondition,
                 |tokens| tokens.terminal(TerminalToken::CloseBracket),
-                |tokens, open, close| {
+                |tokens| {
                     let (tokens, initializer) = for_definition(tokens).maybe(tokens)?;
                     let (tokens, semicolon_1) = tokens.terminal(TerminalToken::Semicolon)?;
                     let (tokens, condition) = expression(tokens, Precedence::None).maybe(tokens)?;
                     let (tokens, semicolon_2) = tokens.terminal(TerminalToken::Semicolon)?;
                     let (tokens, increment) = expression(tokens, Precedence::None).maybe(tokens)?;
-
                     Ok((
                         tokens,
-                        (
-                            open,
-                            initializer,
-                            semicolon_1,
-                            condition,
-                            semicolon_2,
-                            increment,
-                            close,
-                        ),
+                        (initializer, semicolon_1, condition, semicolon_2, increment),
+                    ))
+                },
+                |tokens, open, (initializer, semicolon_1, condition, semicolon_2, increment), close| {
+                    Ok((
+                        tokens,
+                        (open, initializer, semicolon_1, condition, semicolon_2, increment, close),
                     ))
                 },
             )?;
@@ -417,11 +442,17 @@ pub fn foreach_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseResu
                 tokens.terminal(TerminalToken::OpenBracket).opens(
                     ContextType::ForeachStatementCondition,
                     |tokens| tokens.terminal(TerminalToken::CloseBracket),
-                    |tokens, open, close| {
+                    |tokens| {
                         let (tokens, index) = foreach_index(tokens).maybe(tokens)?;
                         let (tokens, (value_type, value_name, in_)) = foreach_value(tokens)?;
                         let (tokens, array) = expression(tokens, Precedence::None)?;
 
+                        Ok((
+                            tokens,
+                            (index, value_type, value_name, in_, array),
+                        ))
+                    },
+                    |tokens, open, (index, value_type, value_name, in_, array), close| {
                         Ok((
                             tokens,
                             (open, index, value_type, value_name, in_, array, close),
@@ -467,8 +498,11 @@ pub fn try_catch_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseRe
                 tokens.terminal(TerminalToken::OpenBracket).opens(
                     ContextType::TryCatchStatementCatchName,
                     |tokens| tokens.terminal(TerminalToken::CloseBracket),
-                    |tokens, open, close| {
-                        identifier(tokens).map_val(|catch_name| (open, catch_name, close))
+                    |tokens| {
+                        identifier(tokens)
+                    },
+                    |tokens, open, catch_name, close| {
+                        Ok((tokens, (open, catch_name, close)))
                     },
                 )?;
             let (tokens, catch_body) = statement_type(tokens).replace_context_from(
@@ -618,10 +652,12 @@ pub fn enum_definition_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> P
                 tokens.terminal(TerminalToken::OpenBrace).opens(
                     ContextType::Span,
                     |tokens| tokens.terminal(TerminalToken::CloseBrace),
-                    |tokens, open, close| {
+                    |tokens| {
                         tokens
-                            .many_until_ended(enum_entry)
-                            .map_val(|entries| (open, entries, close))
+                            .many(enum_entry)
+                    },
+                    |tokens, open, entries, close| {
+                        Ok((tokens, (open, entries, close)))
                     },
                 )?;
 
@@ -802,8 +838,11 @@ pub fn delay_thread_statement<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> Pars
                 tokens.terminal(TerminalToken::OpenBracket).opens(
                     ContextType::Span,
                     |tokens| tokens.terminal(TerminalToken::CloseBracket),
-                    |tokens, open, close| {
-                        expression(tokens, Precedence::None).map_val(|value| (open, value, close))
+                    |tokens| {
+                        expression(tokens, Precedence::None)
+                    },
+                    |tokens, open, duration, close| {
+                        Ok((tokens, (open, duration, close)))
                     },
                 )?;
             let (tokens, value) = expression(tokens, Precedence::None)?;

@@ -37,8 +37,11 @@ fn computed_property_slot<'a, Tokens: TokenIter<'a>>(tokens: Tokens) -> ParseRes
         .opens(
             ContextType::Span,
             |tokens| tokens.terminal(TerminalToken::CloseSquare),
-            |tokens, open, close| {
-                expression(tokens, Precedence::None).map_val(|name| (open, name, close))
+            |tokens| {
+                expression(tokens, Precedence::None)
+            },
+            |tokens, open, name, close| {
+                Ok((tokens, (open, name, close)))
             },
         )
         .determines(|tokens, (open, name, close)| {
